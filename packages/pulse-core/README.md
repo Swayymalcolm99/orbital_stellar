@@ -73,6 +73,7 @@ Stops and removes the watcher for the given address.
 | `engine.reconnecting` | `WatcherNotification` | The engine is retrying its upstream connection |
 | `engine.reconnected` | `WatcherNotification` | Reconnect succeeded |
 | `engine.rate_limited` | `WatcherNotification` | The engine was rate limited and will retry after the delay |
+| `engine.stopped` | `WatcherNotification` | `engine.stop()` was called; emitted before watchers are torn down |
 
 ### `NormalizedEvent` shape
 

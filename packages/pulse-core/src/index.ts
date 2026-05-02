@@ -27,7 +27,8 @@ export type AccountMergeEventType = "account.merged";
 export type WatcherNotificationType =
   | "engine.reconnecting"
   | "engine.reconnected"
-  | "engine.rate_limited";
+  | "engine.rate_limited"
+  | "engine.stopped";
 
 export type OfferEventType = "offer.created" | "offer.updated" | "offer.deleted";
 export type BumpSequenceEventType = "account.bump_sequence";

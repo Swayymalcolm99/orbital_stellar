@@ -193,6 +193,12 @@ export class EventEngine {
     this.closeStream();
     this.isRunning = false;
 
+    this.notifyWatchers("engine.stopped", {
+      type: "engine.stopped",
+      attempt: 0,
+      emittedAt: new Date().toISOString(),
+    });
+
     for (const watcher of this.registry.values()) {
       watcher.stop();
     }

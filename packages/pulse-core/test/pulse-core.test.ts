@@ -128,6 +128,21 @@ describe("pulse-core EventEngine", () => {
     expect(registry.size).toBe(0);
   });
 
+  it("emits engine.stopped to all watchers before tearing them down", () => {
+    const engine = new EventEngine({ network: "testnet" });
+    const watcher = engine.subscribe("GABC");
+    const stopped = vi.fn();
+    watcher.on("engine.stopped", stopped);
+
+    engine.start();
+    engine.stop();
+
+    expect(stopped).toHaveBeenCalledOnce();
+    expect(stopped).toHaveBeenCalledWith(
+      expect.objectContaining({ type: "engine.stopped", attempt: 0 })
+    );
+  });
+
   it("empties the registry but keeps the stream open when unsubscribeAll() is called", () => {
     const engine = new EventEngine({ network: "testnet" });
     engine.subscribe("GABC");
