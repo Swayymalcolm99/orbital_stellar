@@ -1,5 +1,6 @@
 import { Horizon } from "@stellar/stellar-sdk";
 import { Watcher } from "./Watcher.js";
+import { EngineAlreadyStartedError } from "./errors.js";
 import type {
   AccountCreatedEvent,
   AccountEventType,
@@ -165,15 +166,20 @@ export class EventEngine {
 
   /**
    * Starts the SSE stream to listen for Stellar network events.
-   * No-op if the stream is already running.
+   * Returns true if started, false if already running.
+   * Pass `{ strict: true }` to throw EngineAlreadyStartedError instead of returning false.
    */
-  start(): void {
+  start(options?: { strict?: boolean }): boolean {
     if (this.isRunning || this.reconnectTimer) {
+      if (options?.strict) {
+        throw new EngineAlreadyStartedError();
+      }
       this.log.warn("[pulse-core] EventEngine.start() called while the SSE stream is already active.");
-      return;
+      return false;
     }
 
     this.openStream(false);
+    return true;
   }
 
   status(): EngineStatus {

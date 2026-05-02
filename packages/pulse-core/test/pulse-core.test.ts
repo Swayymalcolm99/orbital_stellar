@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { EngineAlreadyStartedError } from "../src/errors.js";
 
 type StreamHandlers = {
   onmessage: (record: unknown) => void;
@@ -290,13 +291,24 @@ describe("pulse-core EventEngine", () => {
   it("guards start() so duplicate live streams are not opened", () => {
     const engine = new EventEngine({ network: "testnet", logger: log });
 
-    engine.start();
-    engine.start();
+    const first = engine.start();
+    const second = engine.start();
 
+    expect(first).toBe(true);
+    expect(second).toBe(false);
     expect(streamInstances).toHaveLength(1);
     expect(log.warn).toHaveBeenCalledWith(
       "[pulse-core] EventEngine.start() called while the SSE stream is already active."
     );
+  });
+
+  it("start({ strict: true }) throws EngineAlreadyStartedError on duplicate start", () => {
+    const engine = new EventEngine({ network: "testnet" });
+
+    engine.start();
+
+    expect(() => engine.start({ strict: true })).toThrowError(EngineAlreadyStartedError);
+    expect(streamInstances).toHaveLength(1);
   });
 
   it("routes self-payments as payment.self exactly once", () => {
