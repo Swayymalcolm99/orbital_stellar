@@ -19,7 +19,6 @@ jobs:
       pull-requests: read
     outputs:
       packages: ${{ steps.filter.outputs.packages }}
-      server: ${{ steps.filter.outputs.server }}
       web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +29,9 @@ jobs:
             packages:
               - 'packages/**'
               - 'tsconfig.base.json'
-            server:
-              - 'apps/server/**'
-              - 'packages/**'
             web:
               - 'apps/web/**'
+              - 'packages/**'
 
   typecheck-packages:
     needs: changes
@@ -65,29 +62,6 @@ jobs:
       - name: Test packages
         run: pnpm -r --if-present test
 
-  typecheck-server:
-    needs: changes
-    if: ${{ needs.changes.outputs.server == 'true' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v6
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - name: Build pulse-core
-        run: pnpm tsc -p packages/pulse-core/tsconfig.json
-      - name: Build pulse-webhooks
-        run: pnpm tsc -p packages/pulse-webhooks/tsconfig.json
-      - name: Typecheck apps/server
-        run: pnpm tsc --noEmit -p apps/server/tsconfig.json
-
   typecheck-web:
     needs: changes
     if: ${{ needs.changes.outputs.web == 'true' }}
@@ -104,5 +78,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build pulse-core
+        run: pnpm tsc -p packages/pulse-core/tsconfig.json
       - name: Typecheck apps/web
         run: pnpm tsc --noEmit -p apps/web/tsconfig.json
