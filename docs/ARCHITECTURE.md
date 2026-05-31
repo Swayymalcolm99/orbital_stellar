@@ -94,7 +94,7 @@ together inside a single Next.js route handler — about 50 lines of glue.
 | **`useStellarPayment` / `useStellarActivity`** | Convenience wrappers over `useStellarEvent`. | `packages/pulse-notify/src/index.ts` | ✅ |
 | **Reference composition** | A Next.js Node-runtime route handler that subscribes to an address and streams events as SSE; plus a `webhook-sample` route that returns an HMAC-signed payload for the demo. | `apps/web/app/api/events/[address]/route.ts`, `apps/web/app/api/webhook-sample/route.ts` | ✅ |
 | **Soroban subscriber** | Subscribes to Stellar RPC for contract events, decodes via the ABI Registry, normalizes into the same `NormalizedEvent` union. | `packages/pulse-core` (planned) | 🛠️ Phase 1 |
-| **Cursor persistence** | Pluggable durable store for the Horizon cursor so a process restart resumes from where it left off. | `packages/pulse-core` (planned) | 🛠️ Phase 1 |
+| **Cursor persistence** | Pluggable durable store for the Horizon and Soroban cursors so a process restart resumes from where it left off. Cursor formats documented in [`docs/cursor-format.md`](./cursor-format.md). | `packages/pulse-core` (planned) | 🛠️ Phase 1 |
 | **Replay adapters** | Pluggable durable queues (Redis / Postgres / S3) for in-flight webhook retries. | `packages/pulse-webhooks` (planned) | 🛠️ Phase 1 |
 
 ---
@@ -376,7 +376,9 @@ API:
 - **Cursor persistence.** A pluggable `CursorStore` interface stored on
   `EventEngine` config. Implementations: in-memory (default, current
   behavior), local file, Redis, Postgres, S3. On reconnect, the engine
-  resumes from the stored cursor instead of `"now"`.
+  resumes from the stored cursor instead of `"now"`. Cursor format
+  specifications and adapter implementation patterns are documented in
+  [`docs/cursor-format.md`](./cursor-format.md).
 - **Replay adapters.** A pluggable `RetryQueue` interface on
   `WebhookDelivery`. Implementations: in-memory (current), Redis, Postgres,
   SQS. Pending retries survive process restarts.

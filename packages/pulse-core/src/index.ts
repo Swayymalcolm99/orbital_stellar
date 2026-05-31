@@ -1,6 +1,7 @@
 export { EventEngine } from "./EventEngine.js";
 export { Watcher } from "./Watcher.js";
 export { EngineAlreadyStartedError } from "./errors.js";
+export type { CursorStore, CursorStoreConfig } from "./CursorStore.js";
 export { StrKey } from "@stellar/stellar-sdk";
 
 /** The Stellar network to connect to. */
@@ -308,8 +309,11 @@ export type ReconnectConfig = {
  * @example
  * const config: CoreConfig = {
  *   network: "testnet",
- *   reconnect: { initialDelayMs: 2000, maxRetries: 5 }
+ *   reconnect: { initialDelayMs: 2000, maxRetries: 5 },
+ *   cursorStore: postgresStore, // Phase 1 feature
  * };
+ *
+ * @see {@link ../docs/cursor-format.md} — Cursor format specification and adapter implementation guide
  */
 export type CoreConfig = {
   /** The Stellar network to connect to. */
@@ -318,6 +322,19 @@ export type CoreConfig = {
   horizonUrl?: string;
   /** Optional reconnection configuration. */
   reconnect?: ReconnectConfig;
+  /**
+   * Optional pluggable cursor store for resumable streams (Phase 1 feature, planned for `v1.0`).
+   *
+   * When provided, the engine persists the cursor position for each subscribed address or contract.
+   * On restart, the engine resumes from the saved cursor instead of `"now"`, enabling crash-resilient
+   * streams without event loss or duplication.
+   *
+   * Supported implementations: in-memory (default), Redis, Postgres, S3, or custom.
+   *
+   * See {@link ../docs/cursor-format.md} for cursor format specifications, adapter implementation
+   * patterns, and worked examples for Horizon and Soroban RPC.
+   */
+  cursorStore?: CursorStore;
   logger?: {
     info(msg: string, ...args: unknown[]): void;
     warn(msg: string, ...args: unknown[]): void;
