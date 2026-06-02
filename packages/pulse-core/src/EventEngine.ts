@@ -20,7 +20,7 @@ import type {
   DataEvent,
   DataEventType,
   EngineStatus,
-  HealthCheckResult,
+  Logger,
   LiquidityPoolDepositEvent,
   LiquidityPoolReserve,
   LiquidityPoolWithdrawEvent,
@@ -96,6 +96,8 @@ export class EventEngine {
   private pendingReconnectSuccessAttempt: number | null = null;
   private readonly reconnectConfig: Required<ReconnectConfig>;
   private isRunning = false;
+  private filters: Map<string, (event: NormalizedEvent) => boolean> = new Map();
+  private log: Logger;
   private lastEventAt: string | null = null;
   private horizonCursor?: string;
   private filters: Map<string, (event: NormalizedEvent) => boolean> = new Map();
@@ -152,7 +154,8 @@ export class EventEngine {
     if (existingWatcher) {
       if (options?.filter) {
         this.log.warn(
-          `[pulse-core] subscribe() called for ${this.describeSubscription(address)} which already has an active watcher — filter option ignored.`
+          "[pulse-core] subscribe() called for an address that already has an active watcher. Filter option ignored.",
+          { address, hasFilter: true }
         );
       }
       return existingWatcher;
@@ -255,7 +258,13 @@ export class EventEngine {
       if (options?.strict) {
         throw new EngineAlreadyStartedError();
       }
-      this.log.warn("[pulse-core] EventEngine.start() called while the SSE stream is already active.", { isRunning: this.isRunning, reconnectTimerActive: this.reconnectTimer !== null });
+      this.log.warn(
+        "[pulse-core] EventEngine.start() called while the SSE stream is already active.",
+        {
+          isRunning: this.isRunning,
+          reconnectTimerActive: this.reconnectTimer !== null,
+        }
+      );
       return false;
     }
 
@@ -407,9 +416,8 @@ export class EventEngine {
         this.route(event);
       },
       onerror: (error) => {
-        const wrappedError = error instanceof HorizonStreamError ? error : new HorizonStreamError(error);
-        this.log.error("[pulse-core] SSE error.", { error: wrappedError });
-        this.handleStreamError(wrappedError);
+        this.log.error("[pulse-core] SSE error.", { error });
+        this.handleStreamError(error);
       },
     };
 
@@ -430,7 +438,9 @@ export class EventEngine {
 
     const nextAttempt = this.reconnectAttempt + 1;
     if (nextAttempt > this.reconnectConfig.maxRetries) {
-      this.log.error("[pulse-core] SSE reconnect stopped.", { failedAttempts: this.reconnectAttempt });
+      this.log.error("[pulse-core] SSE reconnect stopped.", {
+        failedAttempts: this.reconnectAttempt,
+      });
       return;
     }
 
@@ -443,7 +453,10 @@ export class EventEngine {
       const retryAfterMs = this.parseRetryAfterMs(error);
       delayMs = retryAfterMs ?? 60000;
 
-      this.log.warn("[pulse-core] SSE rate limited by Horizon, reconnect scheduled.", { attempt: nextAttempt, delayMs });
+      this.log.warn("[pulse-core] SSE rate limited by Horizon, reconnect scheduled.", {
+        attempt: nextAttempt,
+        delayMs,
+      });
       this.notifyWatchers("engine.rate_limited", {
         type: "engine.rate_limited",
         attempt: nextAttempt,
@@ -457,7 +470,10 @@ export class EventEngine {
       );
       delayMs = Math.floor(Math.random() * exponentialDelay);
 
-      this.log.warn("[pulse-core] SSE reconnect attempt scheduled.", { attempt: nextAttempt, delayMs });
+      this.log.warn("[pulse-core] SSE reconnect attempt scheduled.", {
+        attempt: nextAttempt,
+        delayMs,
+      });
       this.notifyWatchers("engine.reconnecting", {
         type: "engine.reconnecting",
         attempt: nextAttempt,
@@ -644,7 +660,12 @@ export class EventEngine {
       const requiredFields = ["to", "from", "amount", "created_at"] as const;
       for (const field of requiredFields) {
         if (typeof r[field] !== "string" || r[field] === "") {
-          this.log.warn("[pulse-core] normalize() dropping payment record.", { field, record });
+          this.log.warn("[pulse-core] normalize() dropping payment record.", {
+            field,
+            record: raw,
+            source: r.from,
+            address: r.to,
+          });
           return null;
         }
       }
@@ -821,12 +842,19 @@ export class EventEngine {
     raw: unknown
   ): DataEvent | null {
     if (typeof r.source_account !== "string" || r.source_account === "") {
-      this.log.warn("[pulse-core] normalize() dropping manage_data record.", { field: "source_account", record: raw });
+      this.log.warn("[pulse-core] normalize() dropping manage_data record.", {
+        field: "source_account",
+        record: raw,
+      });
       return null;
     }
 
     if (typeof r.data_name !== "string" || r.data_name === "") {
-      this.log.warn("[pulse-core] normalize() dropping manage_data record.", { field: "data_name", record: raw });
+      this.log.warn("[pulse-core] normalize() dropping manage_data record.", {
+        field: "data_name",
+        record: raw,
+        source: r.source_account,
+      });
       return null;
     }
 
@@ -948,8 +976,8 @@ export class EventEngine {
     for (const field of requiredStringFields) {
       if (typeof r[field] !== "string" || r[field] === "") {
         this.log.warn(
-          `[pulse-core] normalize() dropping create_claimable_balance record: field "${field}" is missing or not a non-empty string.`,
-          { record: raw }
+          "[pulse-core] normalize() dropping create_claimable_balance record.",
+          { field, record: raw, source: r.source_account }
         );
         return null;
       }
@@ -967,8 +995,8 @@ export class EventEngine {
       )
     ) {
       this.log.warn(
-        '[pulse-core] normalize() dropping create_claimable_balance record: field "claimants" is missing or invalid.',
-        { record: raw }
+        "[pulse-core] normalize() dropping create_claimable_balance record.",
+        { field: "claimants", record: raw, source: r.source_account }
       );
       return null;
     }
@@ -1006,8 +1034,8 @@ export class EventEngine {
     for (const field of requiredStringFields) {
       if (typeof r[field] !== "string" || r[field] === "") {
         this.log.warn(
-          `[pulse-core] normalize() dropping claim_claimable_balance record: field "${field}" is missing or not a non-empty string.`,
-          { record: raw }
+          "[pulse-core] normalize() dropping claim_claimable_balance record.",
+          { field, record: raw, source: r.source_account }
         );
         return null;
       }
@@ -1036,8 +1064,8 @@ export class EventEngine {
     for (const field of requiredFields) {
       if (typeof r[field] !== "string" || r[field] === "") {
         this.log.warn(
-          `[pulse-core] normalize() dropping liquidity_pool_deposit record: field "${field}" is missing.`,
-          { record: raw }
+          "[pulse-core] normalize() dropping liquidity_pool_deposit record.",
+          { field, record: raw, source: r.source_account }
         );
         return null;
       }
@@ -1045,8 +1073,8 @@ export class EventEngine {
 
     if (!Array.isArray(r.reserves_deposited)) {
       this.log.warn(
-        "[pulse-core] normalize() dropping liquidity_pool_deposit record: reserves_deposited is not an array.",
-        { record: raw }
+        "[pulse-core] normalize() dropping liquidity_pool_deposit record.",
+        { field: "reserves_deposited", record: raw, source: r.source_account }
       );
       return null;
     }
@@ -1076,8 +1104,8 @@ export class EventEngine {
     for (const field of requiredFields) {
       if (typeof r[field] !== "string" || r[field] === "") {
         this.log.warn(
-          `[pulse-core] normalize() dropping liquidity_pool_withdraw record: field "${field}" is missing.`,
-          { record: raw }
+          "[pulse-core] normalize() dropping liquidity_pool_withdraw record.",
+          { field, record: raw, source: r.source_account }
         );
         return null;
       }
@@ -1085,8 +1113,8 @@ export class EventEngine {
 
     if (!Array.isArray(r.reserves_received)) {
       this.log.warn(
-        "[pulse-core] normalize() dropping liquidity_pool_withdraw record: reserves_received is not an array.",
-        { record: raw }
+        "[pulse-core] normalize() dropping liquidity_pool_withdraw record.",
+        { field: "reserves_received", record: raw, source: r.source_account }
       );
       return null;
     }
@@ -1210,8 +1238,8 @@ export class EventEngine {
       return filter(event);
     } catch (err) {
       this.log.warn(
-        `[pulse-core] subscribe() filter threw for ${this.describeSubscription(address)} — treating as reject.`,
-        err
+        "[pulse-core] subscribe() filter threw for address. Treating as reject.",
+        { address, error: err }
       );
       return false;
     }
